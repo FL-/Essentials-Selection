@@ -6,89 +6,129 @@
 # similar to Stadium/Battle Tower, where you can choose a certain number and
 # order of pokémon.
 #
-#===============================================================================
+#== INSTALLATION ===============================================================
 #
-# To this script works, put it above main and use in script command 
-# 'PokemonSelection.choose(min, max, canCancel, acceptFainted, ruleset)' where 
-# min and max are the minimum and maximum pokémon number selection (default
-# values are 1 and 6), canCancel when true the player can cancel the selection
-# (default is false), acceptFainted when true the player can choose
-# fainted pokémon and eggs (default is false), ruleset is a custom challenge
-# used instead (default is nil). This method return if a party is choosen.
+# To this script works, put it above main OR convert into a plugin. 
+#
+#== HOW TO USE =================================================================
+#
+# Use the script command PokemonSelection.choose. This return if something is
+# choosen, so it can be use on conditional branchs. You can give as argument the
+# min/max pokémon number to select or a PokemonSelection::Parameters class.
 #
 # To restore the previous party, use 'PokemonSelection.restore'. This do nothing
-# is there's no party to restore. Ths method returns if the party is restored.
+# if there's no party to restore. Ths method returns if the party was restored.
 #
-# Between the two commands, don't allow the player to caught or deposit/withdraw
-# any pokémon or the pokémon will be lost! However, you pokémon can gain
-# exp/level, evolve, change hold item/moves normally. If you try to choose a
-# new party before restore the old one, the game raises an error. This won't
-# occurs if the previous selection is only an order change. ONLY in Debug mode
-# you get the phrase "Generate Pokemon teams for this challenge?", always
-# choose "No".
+# If you call PokemonSelection.choose and player have an invalid party (like
+# putting the minimum pokémon number to 3 when player has only 2), the game
+# raises an error. You can use 'PokemonSelection.hasValidTeam?' to check if the
+# party is valid. This method has the same arguments as 'choose'.
 #
-# 'PokemonSelection.hasValidTeam?(min, max, canCancel, acceptFainted, ruleset)'
-# returns if your team is valid. If you try to use a invalid team (like putting
-# the minimum pokémon number as 3, but only having 2 pokémon), the selection is
-# treats as canceled. If the canCancel=false, the game goes in an infinite loop.
+#== EXAMPLES ===================================================================
 #
-# Example: To make a 3vs3 battle, use 'PokemonSelection.choose(3,3)' and, after
-# the battle (regardless of result) use 'PokemonSelection.restore'. Only allows
-# the player to go in the battle if 'PokemonSelection.hasValidTeam?(3,3)' is
-# true, or set the minimum as 1.
+# Remember to use 'PokemonSelection.hasValidTeam?' before, to check if player 
+# has a possible valid team, and 'PokemonSelection.restore' after, to restore 
+# the previous party after the battle/event.
+#
+# - 3vs3 battle:
+#
+#  PokemonSelection.choose(3,3)
+#
+# - Only Grass, Water and Fire pokémon. Ho-oh and Kyogre are banned:
+#
+#  pr = PokemonSelection::Parameters.new
+#  pr.baseChallenge = PokemonChallengeRules.new 
+#  pr.baseChallenge.addPokemonRule(TypeRestriction.new([:GRASS,:FIRE,:WATER]))
+#  pr.baseChallenge.addPokemonRule(BannedSpeciesRestriction.new(:HOOH,:KYOGRE))
+#  PokemonSelection.choose(pr)
+#
+# - Only one Pikachu. Can also choose fainted pokémon and eggs:
+#
+#  pr = PokemonSelection::Parameters.new
+#  pr.minPokemon = 1
+#  pr.maxPokemon = 1
+#  pr.acceptFainted = true
+#  pr.baseChallenge = PokemonChallengeRules.new 
+#  pr.baseChallenge.addPokemonRule(SpeciesRestriction.new(:PIKACHU))
+#  PokemonSelection.choose(pr)
+#
+#== NOTES ======================================================================
+#
+# If you try to choose a new party before restore the old one, the game raises
+# an error. This won't occurs if the previous selection is only an order change. 
 #
 # To perform only an order change, use
-# 'PokemonSelection.choose($Trainer,party.size,$Trainer,party.size,true,true)'.
+# 'PokemonSelection.choose($Trainer,party.size,$Trainer,party.size)'.
 #
 # If you take a look in PokemonChallengeRules applications in scripts you can
 # customize some others choice conditions like have a certain level or ban
 # certain pokémon.
-# 
+#
 #===============================================================================
 
-if defined?(PluginManager)
+if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.1",                                                     
+    :version => "1.2",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
 end
 
 module PokemonSelection
-  def self.rules(min=1, max=6, canCancel=false, acceptFainted=false)
-    ret=PokemonChallengeRules.new
-    ret.setLevelAdjustment(OpenLevelAdjustment.new(PBExperience::MAXLEVEL))
-    ret.addPokemonRule(AblePokemonRestriction.new) if !acceptFainted
-    ret.ruleset.setNumberRange(min,max)
-    return ret
+  class Parameters
+    attr_accessor :minPokemon
+    attr_accessor :maxPokemon
+    attr_accessor :canCancel
+    attr_accessor :acceptFainted # and eggs
+    attr_accessor :baseChallenge
+
+    def initialize
+      @minPokemon = 1
+      @maxPokemon = 6
+      @canCancel = false
+      @acceptFainted = false
+    end
+  
+    def challenge
+      ret = @baseChallenge ? @baseChallenge.clone : PokemonChallengeRules.new 
+      ret.setLevelAdjustment(OpenLevelAdjustment.new(PBExperience::MAXLEVEL))
+      ret.addPokemonRule(AblePokemonRestriction.new) if !@acceptFainted
+      ret.ruleset.setNumberRange(@minPokemon,@maxPokemon)
+      return ret
+    end
+
+    def self.factory(*args)
+      return args[0] if args.size>0 && args[0] && args[0].is_a?(Parameters)
+      ret = Parameters.new
+      ret.minPokemon = args[0] if args.size>=1
+      ret.maxPokemon = args[1] if args.size>=2
+      return ret
+    end
   end
   
-  def self.hasValidTeam?(
-    min=1, max=6, canCancel=false, acceptFainted=false, ruleset=nil
-  )
-    pbBattleChallenge.set(
-      "pokemonSelectionRules", 7, ruleset ? ruleset : self.rules(min,max)
-    )
+  def self.hasValidTeam?(*args)
+    params = Parameters.factory(*args)
+    pbBattleChallenge.setSimple(params.challenge)
     ret=pbHasEligible?
     pbBattleChallenge.pbCancel
     return ret
   end  
-  
-  def self.choose(
-    min=1, max=6, canCancel=false, acceptFainted=false, ruleset=nil
-  )
+
+  def self.choose(*args)
     if $PokemonGlobal.pokemonSelectionOriginalParty
-      raise "Can't choose a new party until restore the old one"
+      raise "Can't choose a new party until restore the old one!"
+    end
+    params = Parameters.factory(*args)
+    if !hasValidTeam?(params)
+      raise "Player hasn't a valid team!"
     end
     validPartyChosen=false
-    pbBattleChallenge.set(
-      "pokemonSelectionRules", 7, ruleset ? ruleset : self.rules(min,max)
-    )
+    pbBattleChallenge.setSimple(params.challenge)
     loop do
       pbEntryScreen
-      validPartyChosen=(pbBattleChallenge.getParty!=nil)
-      break if(canCancel || validPartyChosen)
+      validPartyChosen = pbBattleChallenge.getParty!=nil
+      break if (params.canCancel || pbBattleChallenge.getParty)
       Kernel.pbMessage(_INTL("Choose a Pokémon."))
     end
     if validPartyChosen
@@ -101,16 +141,72 @@ module PokemonSelection
     pbBattleChallenge.pbCancel
     return validPartyChosen
   end
-  
-  def self.restore(*args)
-    hasSavedTeam=($PokemonGlobal.pokemonSelectionOriginalParty!=nil)
-    if hasSavedTeam
-      $Trainer.party=$PokemonGlobal.pokemonSelectionOriginalParty
-      $PokemonGlobal.pokemonSelectionOriginalParty=nil
+
+  def self.restore
+    if !$PokemonGlobal.pokemonSelectionOriginalParty
+      echoln("Trying to restore a party without party stored.")
+      return false
     end
-    return hasSavedTeam
+    newPokemon = newPokemonOnParty
+    $Trainer.party=$PokemonGlobal.pokemonSelectionOriginalParty
+    $PokemonGlobal.pokemonSelectionOriginalParty=nil
+    addPokemonOnArray(newPokemon)
+    return true
+  end  
+
+  def self.newPokemonOnParty
+    return $Trainer.party.find_all{|partyPokemon|
+      !$PokemonGlobal.pokemonSelectionOriginalParty.find{|originalPartyPokemon| 
+        originalPartyPokemon.personalID == partyPokemon.personalID
+      }
+    }
+  end
+
+  def self.addPokemonOnArray(pokemonArray)
+    for pokemon in pokemonArray
+      if $Trainer.party.length==6
+        $PokemonStorage.pbStoreCaught(pokemon)
+      else
+        $Trainer.party.push(pokemon)
+      end
+    end
   end
 end
+
+# This class uses a type array that only allows the pokémon as valid if it
+# has one of these types when bannedTypes=false or the reverse 
+# when bannedTypes=true
+class TypeRestriction
+  def initialize(types, bannedTypes=false)
+    @types=types
+    @bannedTypes = bannedTypes
+  end
+
+  def isValid?(pokemon)
+    ret=false
+    for singleType in @types
+      if pokemon.hasType?(singleType)
+        ret = true
+        break
+      end
+    end
+    ret = !ret if @bannedTypes
+    return ret
+  end
+end
+
+class BattleChallenge
+  def setSimple(rules)
+    @id = "pokemonSelectionRules"
+    @numRounds = 1
+    @rules = rules
+    register(@id, false, 3, 0, 0)
+  end
+end
+
+class BattleChallenge; def getParty; return @bc.party; end; end
+
+class PokemonGlobalMetadata; attr_accessor :pokemonSelectionOriginalParty; end
 
 class PokemonRuleSet # Redefined to fix a bug
   def hasValidTeam?(team)
@@ -140,32 +236,7 @@ class PokemonRuleSet # Redefined to fix a bug
   end
 end  
 
-# This class uses a type array that only allows the pokémon as valid if it
-# has one of these types when bannedTypes=false or the reverse 
-# when bannedTypes=true
-class TypeRestriction
-  def initialize(types, bannedTypes=true)
-    @types=types
-    @bannedTypes = bannedTypes
-  end
-
-  def isValid?(pokemon)
-    ret=false
-    for singleType in @types
-      if pokemon.hasType?(singleType)
-        ret = true
-        break
-      end
-    end
-    ret = !ret if @bannedTypes
-    return ret
-  end
-end
-
-class BattleChallenge; def getParty; return @bc.party; end; end
-
-class PokemonGlobalMetadata; attr_accessor :pokemonSelectionOriginalParty; end
-
+# To work with Essentials v17, v18 and v19+
 if !defined?(PBExperience::MAXLEVEL)
   if defined?(MAXIMUM_LEVEL)
     module PBExperience
@@ -175,26 +246,5 @@ if !defined?(PBExperience::MAXLEVEL)
     module PBExperience
       MAXLEVEL = Settings::MAXIMUM_LEVEL
     end
-  end
-end
-
-module PokemonSelection #mod
-  def self.restoreWithCaught(*args)
-    newPokemonArray = []
-    for partyPokemon in $Trainer.party
-      isNew = !$PokemonGlobal.pokemonSelectionOriginalParty.find{|pk| 
-        pk.personalID == partyPokemon.personalID
-      }
-      newPokemonArray.push(partyPokemon) if isNew
-    end
-    ret = self.restore(args)
-    for pokemon in newPokemonArray
-      if $Trainer.party.length==6
-        $PokemonStorage.pbStoreCaught(pokemon)
-      else
-        $Trainer.party.push(pokemon)
-      end
-    end
-    return ret
   end
 end
