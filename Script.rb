@@ -69,7 +69,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.2",                                                     
+    :version => "1.2.1",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -225,7 +225,8 @@ class PokemonRuleSet # Redefined to fix a bug
       return false
     end
     if @teamRules.length>0
-      pbEachCombination(team,teamNumber){|comb|
+      #pbEachCombination(team,teamNumber){|comb| # original
+      pbEachCombination(team,self.minLength){|comb| # fixed
          if isValid?(comb)
            return true
          end
