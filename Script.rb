@@ -12,23 +12,24 @@
 #
 #== HOW TO USE =================================================================
 #
-# Use the script command PokemonSelection.choose. This return if something is
+# Use the script command 'PokemonSelection.choose'. This return if something is
 # choosen, so it can be use on conditional branchs. You can give as argument the
-# min/max pokémon number to select or a PokemonSelection::Parameters class.
+# min/max pokémon number to select or a 'PokemonSelection::Parameters' class.
 #
 # To restore the previous party, use 'PokemonSelection.restore'. This do nothing
 # if there's no party to restore. Ths method returns if the party was restored.
 #
-# If you call PokemonSelection.choose and player have an invalid party (like
+# If you call 'PokemonSelection.choose' and player have an invalid party (like
 # putting the minimum pokémon number to 3 when player has only 2), the game
 # raises an error. You can use 'PokemonSelection.hasValidTeam?' to check if the
 # party is valid. This method has the same arguments as 'choose'.
 #
 #== EXAMPLES ===================================================================
 #
-# Remember to use 'PokemonSelection.hasValidTeam?' before, to check if player 
-# has a possible valid team, and 'PokemonSelection.restore' after, to restore 
-# the previous party after the battle/event.
+# Remember to use 'PokemonSelection.hasValidTeam?' before on an "if" or in a
+# conditional branch with script condition, to check if player has a possible 
+# valid team, and 'PokemonSelection.restore' after, to restore the previous 
+# party after the battle/event.
 #
 # - 3vs3 battle:
 #
@@ -36,21 +37,41 @@
 #
 # - Only Grass, Water and Fire pokémon. Ho-oh and Kyogre are banned:
 #
+#  challenge = PokemonChallengeRules.new 
+#  challenge.addPokemonRule(TypeRestriction.new([:GRASS,:FIRE,:WATER]))
+#  challenge.addPokemonRule(BannedSpeciesRestriction.new(:HOOH,:KYOGRE))
 #  pr = PokemonSelection::Parameters.new
-#  pr.baseChallenge = PokemonChallengeRules.new 
-#  pr.baseChallenge.addPokemonRule(TypeRestriction.new([:GRASS,:FIRE,:WATER]))
-#  pr.baseChallenge.addPokemonRule(BannedSpeciesRestriction.new(:HOOH,:KYOGRE))
+#  pr.setBaseChallenge(challenge)
 #  PokemonSelection.choose(pr)
 #
-# - Only one Pikachu. Can also choose fainted pokémon and eggs:
+# - Only one Pikachu. Can also choose fainted pokémon and eggs (this example 
+# can be written on only one line):
 #
-#  pr = PokemonSelection::Parameters.new
-#  pr.minPokemon = 1
-#  pr.maxPokemon = 1
-#  pr.acceptFainted = true
-#  pr.baseChallenge = PokemonChallengeRules.new 
-#  pr.baseChallenge.addPokemonRule(SpeciesRestriction.new(:PIKACHU))
-#  PokemonSelection.choose(pr)
+#  PokemonSelection.choose(PokemonSelection::Parameters.new
+#    .setMinPokemon(1)
+#    .setMaxPokemon(1)
+#    .setAcceptFainted(true)
+#    .setBaseChallenge(PokemonChallengeRules.new.addPokemonRule(
+#      SpeciesRestriction.new(:PIKACHU)
+#    ))
+#  )
+#
+# - (Event example): 2 pokémon. Can't cancel:
+#
+# @>Conditional Branch: Script: PokemonSelection.hasValidTeam?(PokemonSelection::Parameters.new.setMinPokemon(2).setMaxPokemon(2).setCanCancel(false)) 
+#   @>Script: PokemonSelection.choose(
+# :         :  PokemonSelection::Parameters.new
+# :         :  .setMinPokemon(2)
+# :         :  .setMaxPokemon(2)
+# :         :  .setCanCancel(false))
+#   @>Text: Do things like battles here.
+#   @>Script: PokemonSelection.restore
+#   @>
+# : Else
+#   @>Text: Invalid party!
+#   @>
+# : Branch End
+# @>
 #
 #== NOTES ======================================================================
 #
@@ -58,7 +79,7 @@
 # an error. This won't occurs if the previous selection is only an order change. 
 #
 # To perform only an order change, use
-# 'PokemonSelection.choose($Trainer,party.size,$Trainer,party.size)'.
+# 'PokemonSelection.choose($Trainer.party.size,$Trainer.party.size)'.
 #
 # If you take a look in PokemonChallengeRules applications in scripts you can
 # customize some others choice conditions like have a certain level or ban
@@ -69,7 +90,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.2.1",                                                     
+    :version => "1.3",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -89,6 +110,31 @@ module PokemonSelection
       @canCancel = false
       @acceptFainted = false
     end
+    
+    def setMinPokemon(minPokemon)
+      @minPokemon = minPokemon
+      return self
+    end
+    
+    def setMaxPokemon(maxPokemon)
+      @maxPokemon = maxPokemon
+      return self
+    end
+    
+    def setCanCancel(canCancel)
+      @canCancel = canCancel
+      return self
+    end
+    
+    def setAcceptFainted(acceptFainted)
+      @acceptFainted = acceptFainted
+      return self
+    end
+    
+    def setBaseChallenge(baseChallenge)
+      @baseChallenge = baseChallenge
+      return self
+    end
   
     def challenge
       ret = @baseChallenge ? @baseChallenge.clone : PokemonChallengeRules.new 
@@ -101,8 +147,8 @@ module PokemonSelection
     def self.factory(*args)
       return args[0] if args.size>0 && args[0] && args[0].is_a?(Parameters)
       ret = Parameters.new
-      ret.minPokemon = args[0] if args.size>=1
-      ret.maxPokemon = args[1] if args.size>=2
+      ret.setMinPokemon(args[0]) if args.size>=1
+      ret.setMaxPokemon(args[1]) if args.size>=2
       return ret
     end
   end
