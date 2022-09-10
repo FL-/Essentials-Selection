@@ -90,7 +90,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.3",                                                     
+    :version => "1.3.1",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -281,7 +281,19 @@ class PokemonRuleSet # Redefined to fix a bug
     end
     return true
   end
-end  
+end
+
+class BattleChallenge
+  def register(id, doublebattle, numPokemon, battletype, mode = 1)
+    ensureType(id)
+    if battletype == BattleFactoryID
+      @bc.setExtraData(BattleFactoryData.new(@bc))
+      numPokemon = 3
+      battletype = BattleTowerID
+    end
+    @rules = modeToRules(doublebattle, numPokemon, battletype, mode) if !@rules
+  end
+end unless defined?(Essentials) # Only below v19
 
 # To work with Essentials v17, v18 and v19+
 if !defined?(PBExperience::MAXLEVEL)
