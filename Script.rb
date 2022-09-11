@@ -90,7 +90,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.3.1",                                                     
+    :version => "1.3.2",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -284,6 +284,9 @@ class PokemonRuleSet # Redefined to fix a bug
 end
 
 class BattleChallenge
+  BattleFactoryID = BattleFactory if !defined?(BattleFactoryID)
+  BattleTowerID = BattleTower if !defined?(BattleTowerID)
+  
   def register(id, doublebattle, numPokemon, battletype, mode = 1)
     ensureType(id)
     if battletype == BattleFactoryID
