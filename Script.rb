@@ -19,7 +19,7 @@
 # To restore the previous party, use 'PokemonSelection.restore'. This do nothing
 # if there's no party to restore. Ths method returns if the party was restored.
 #
-# If you call 'PokemonSelection.choose' and player have an invalid party (like
+# If you call 'PokemonSelection.choose' and player has an invalid party (like
 # putting the minimum pokémon number to 3 when player has only 2), the game
 # raises an error. You can use 'PokemonSelection.hasValidTeam?' to check if the
 # party is valid. This method has the same arguments as 'choose'.
@@ -79,7 +79,8 @@
 # an error. This won't occurs if the previous selection is only an order change. 
 #
 # To perform only an order change, use
-# 'PokemonSelection.choose($Trainer.party.size,$Trainer.party.size)'.
+# 'PokemonSelection.choose($player.party.size,$player.party.size)' (change
+# $player to $Trainer if you are using Essentials v19.1 or lower).
 #
 # If you take a look in PokemonChallengeRules applications in scripts you can
 # customize some others choice conditions like have a certain level or ban
@@ -90,7 +91,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.3.2",                                                     
+    :version => "1.3.3",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -138,7 +139,7 @@ module PokemonSelection
   
     def challenge
       ret = @baseChallenge ? @baseChallenge.clone : PokemonChallengeRules.new 
-      ret.setLevelAdjustment(OpenLevelAdjustment.new(PBExperience::MAXLEVEL))
+      ret.setLevelAdjustment(OpenLevelAdjustment.new(Settings::MAXIMUM_LEVEL))
       ret.addPokemonRule(AblePokemonRestriction.new) if !@acceptFainted
       ret.ruleset.setNumberRange(@minPokemon,@maxPokemon)
       return ret
@@ -152,8 +153,13 @@ module PokemonSelection
       return ret
     end
   end
+
+  def self.refreshGlobals
+    $player ||= $Trainer
+  end
   
   def self.hasValidTeam?(*args)
+    refreshGlobals
     params = Parameters.factory(*args)
     pbBattleChallenge.setSimple(params.challenge)
     ret=pbHasEligible?
@@ -175,33 +181,34 @@ module PokemonSelection
       pbEntryScreen
       validPartyChosen = pbBattleChallenge.getParty!=nil
       break if (params.canCancel || pbBattleChallenge.getParty)
-      Kernel.pbMessage(_INTL("Choose a Pokémon."))
+      pbMessage(_INTL("Choose a Pokémon."))
     end
     if validPartyChosen
       # If the party size is the same, it is only an order change 
-      if($Trainer.party.size != pbBattleChallenge.getParty.size)
-        $PokemonGlobal.pokemonSelectionOriginalParty=$Trainer.party
+      if $player.party.size != pbBattleChallenge.getParty.size
+        $PokemonGlobal.pokemonSelectionOriginalParty=$player.party
       end 
-      $Trainer.party=pbBattleChallenge.getParty
+      $player.party=pbBattleChallenge.getParty
     end
     pbBattleChallenge.pbCancel
     return validPartyChosen
   end
 
   def self.restore
+    refreshGlobals
     if !$PokemonGlobal.pokemonSelectionOriginalParty
       echoln("Trying to restore a party without party stored.")
       return false
     end
     newPokemon = newPokemonOnParty
-    $Trainer.party=$PokemonGlobal.pokemonSelectionOriginalParty
+    $player.party=$PokemonGlobal.pokemonSelectionOriginalParty
     $PokemonGlobal.pokemonSelectionOriginalParty=nil
     addPokemonOnArray(newPokemon)
     return true
   end  
 
   def self.newPokemonOnParty
-    return $Trainer.party.find_all{|partyPokemon|
+    return $player.party.find_all{|partyPokemon|
       !$PokemonGlobal.pokemonSelectionOriginalParty.find{|originalPartyPokemon| 
         originalPartyPokemon.personalID == partyPokemon.personalID
       }
@@ -210,10 +217,10 @@ module PokemonSelection
 
   def self.addPokemonOnArray(pokemonArray)
     for pokemon in pokemonArray
-      if $Trainer.party.length==6
+      if $player.party.length==6
         $PokemonStorage.pbStoreCaught(pokemon)
       else
-        $Trainer.party.push(pokemon)
+        $player.party.push(pokemon)
       end
     end
   end
@@ -248,45 +255,58 @@ class BattleChallenge
     @rules = rules
     register(@id, false, 3, 0, 0)
   end
-end
 
-class BattleChallenge; def getParty; return @bc.party; end; end
+  def getParty
+    return @bc.party
+  end
+end
 
 class PokemonGlobalMetadata; attr_accessor :pokemonSelectionOriginalParty; end
 
-class PokemonRuleSet # Redefined to fix a bug
+#===============================================================================
+# For compatibility with older Essentials
+#===============================================================================
+
+if defined?(Essentials)
+  SELECTION_MAJOR_VERSION = Essentials::VERSION.split(".")[0].to_i
+elsif defined?(ESSENTIALS_VERSION)
+  SELECTION_MAJOR_VERSION = ESSENTIALS_VERSION.split(".")[0].to_i
+elsif defined?(ESSENTIALSVERSION)
+  SELECTION_MAJOR_VERSION = ESSENTIALSVERSION.split(".")[0].to_i
+else
+  SELECTION_MAJOR_VERSION = 0
+end
+
+class PokemonRuleSet
   def hasValidTeam?(team)
     if !team || team.length<self.minTeamLength
       return false
     end
-    teamNumber=[self.maxLength,team.length].min
     validPokemon=[]
     for pokemon in team
       if isPokemonValid?(pokemon)
         validPokemon.push(pokemon)
       end
     end
-    #if validPokemon.length<teamNumber # original
-    if validPokemon.length<self.minLength # fixed
+    if validPokemon.length<self.minLength
       return false
     end
     if @teamRules.length>0
-      #pbEachCombination(team,teamNumber){|comb| # original
-      pbEachCombination(team,self.minLength){|comb| # fixed
-         if isValid?(comb)
-           return true
-         end
+      pbEachCombination(team,self.minLength){|comb|
+        if isValid?(comb)
+          return true
+        end
       }
       return false
     end
     return true
   end
-end
+end unless SELECTION_MAJOR_VERSION >= 21
 
 class BattleChallenge
   BattleFactoryID = BattleFactory if !defined?(BattleFactoryID)
   BattleTowerID = BattleTower if !defined?(BattleTowerID)
-  
+
   def register(id, doublebattle, numPokemon, battletype, mode = 1)
     ensureType(id)
     if battletype == BattleFactoryID
@@ -296,17 +316,20 @@ class BattleChallenge
     end
     @rules = modeToRules(doublebattle, numPokemon, battletype, mode) if !@rules
   end
-end unless defined?(Essentials) # Only below v19
+end unless SELECTION_MAJOR_VERSION >= 19
 
-# To work with Essentials v17, v18 and v19+
-if !defined?(PBExperience::MAXLEVEL)
-  if defined?(MAXIMUM_LEVEL)
-    module PBExperience
-      MAXLEVEL = MAXIMUM_LEVEL
-    end
-  else
-    module PBExperience
-      MAXLEVEL = Settings::MAXIMUM_LEVEL
-    end
+def pbMessage(
+  message, commands = nil, cmdIfCancel = 0, skin = nil, defaultCmd = 0, &block
+)
+  return Kernel.pbMessage(
+    message, commands, cmdIfCancel, skin, defaultCmd, &block
+  )
+end unless defined?(:pbMessage)
+
+module Settings
+  if defined?(::MAXIMUM_LEVEL) #v17
+    MAXIMUM_LEVEL = ::MAXIMUM_LEVEL
+  else #v18
+    MAXIMUM_LEVEL = PBExperience::MAXLEVEL
   end
-end
+end unless defined?(Settings) && Settings.const_defined?(:MAXIMUM_LEVEL) # < v19
