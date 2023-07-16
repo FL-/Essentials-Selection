@@ -45,7 +45,8 @@
 #  PokemonSelection.choose(pr)
 #
 # - Only one Pikachu. Can also choose fainted pokémon and eggs (this example 
-# can be written on only one line):
+# can be written on only one line. This multiline example doesn't work in 
+# Essentials v18.1 or lower):
 #
 #  PokemonSelection.choose(PokemonSelection::Parameters.new
 #    .setMinPokemon(1)
@@ -91,7 +92,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.3.3",                                                     
+    :version => "1.3.4",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
