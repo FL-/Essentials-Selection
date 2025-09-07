@@ -27,7 +27,7 @@
 #== EXAMPLES ===================================================================
 #
 # Remember to use 'PokemonSelection.hasValidTeam?' before on an "if" or in a
-# conditional branch with script condition, to check if player has a possible 
+# conditional branch with a script condition, to check if player has a possible 
 # valid team, and 'PokemonSelection.restore' after, to restore the previous 
 # party after the battle/event.
 #
@@ -44,9 +44,21 @@
 #  pr.setBaseChallenge(challenge)
 #  PokemonSelection.choose(pr)
 #
+# - Little Cup (from Stadium 2) team rules:
+#
+#  challenge = PokemonChallengeRules.new 
+#  challenge.addPokemonRule(StandardRestriction.new)
+#  challenge.addPokemonRule(UnevolvedFormRestriction.new)
+#  challenge.addPokemonRule(MaximumLevelRestriction.new(5))
+#  challenge.addTeamRule(SpeciesClause.new)
+#  challenge.addTeamRule(ItemClause.new)
+#  pr = PokemonSelection::Parameters.new
+#  pr.setBaseChallenge(challenge)
+#  PokemonSelection.choose(pr)
+#
 # - Only one Pikachu. Can also choose fainted pokémon and eggs (this example 
 # can be written on only one line. This multiline example doesn't work in 
-# Essentials v18.1 or lower):
+# Essentials v18.1 or lower due to lack of space):
 #
 #  PokemonSelection.choose(PokemonSelection::Parameters.new
 #    .setMinPokemon(1)
@@ -84,7 +96,7 @@
 # $player to $Trainer if you are using Essentials v19.1 or lower).
 #
 # If you take a look in PokemonChallengeRules applications in scripts you can
-# customize some others choice conditions like have a certain level or ban
+# customize some others choice conditions like needing a certain level or ban
 # certain pokémon.
 #
 #===============================================================================
@@ -92,7 +104,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Pokémon Selection")
   PluginManager.register({                                                 
     :name    => "Pokémon Selection",                                        
-    :version => "1.3.4",                                                     
+    :version => "1.3.5",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=290931",             
     :credits => "FL"
   })
@@ -140,7 +152,9 @@ module PokemonSelection
   
     def challenge
       ret = @baseChallenge ? @baseChallenge.clone : PokemonChallengeRules.new 
-      ret.setLevelAdjustment(OpenLevelAdjustment.new(Settings::MAXIMUM_LEVEL))
+      if !ret.levelAdjustment
+        ret.setLevelAdjustment(OpenLevelAdjustment.new(Settings::MAXIMUM_LEVEL))
+      end
       ret.addPokemonRule(AblePokemonRestriction.new) if !@acceptFainted
       ret.ruleset.setNumberRange(@minPokemon,@maxPokemon)
       return ret
@@ -170,11 +184,11 @@ module PokemonSelection
 
   def self.choose(*args)
     if $PokemonGlobal.pokemonSelectionOriginalParty
-      raise "Can't choose a new party until restore the old one!"
+      raise "Can't choose a new party until PokemonSelection.restore is called!"
     end
     params = Parameters.factory(*args)
     if !hasValidTeam?(params)
-      raise "Player hasn't a valid team!"
+      raise "Player doesn't have a valid team!"
     end
     validPartyChosen=false
     pbBattleChallenge.setSimple(params.challenge)
@@ -325,7 +339,7 @@ def pbMessage(
   return Kernel.pbMessage(
     message, commands, cmdIfCancel, skin, defaultCmd, &block
   )
-end unless defined?(:pbMessage)
+end unless Object.private_method_defined?(:pbMessage)
 
 module Settings
   if defined?(::MAXIMUM_LEVEL) #v17
